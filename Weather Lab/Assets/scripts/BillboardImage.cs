@@ -1,8 +1,6 @@
 using System;
 using System.Net;
 using System.Collections;
-using System.Collections.Generic;
-using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.Networking;
 
@@ -10,20 +8,27 @@ public class BillboardImage : MonoBehaviour
 {
     private const string webImage = "https://upload.wikimedia.org/wikipedia/commons/thumb/1/15/Cat_August_2010-4.jpg/2560px-Cat_August_2010-4.jpg";
 
-    private Texture2D cachedImage;
+    private Texture2D cachedImage; //stores the downloaded image
+    public Renderer targetRenderer; //Assign the Renderer to display the image
+    public Texture defaultTexture; //Fallback texture if download fails
 
-    public Renderer targetRenderer; // Assign the Renderer to display the image
-
-    private BillboardImage billboardImage;
-
-    public Texture defaultTexture;
+    private bool isDownloading = false; //prevents multiple downloads
 
     private void Start()
     {
-        billboardImage = gameObject.AddComponent<BillboardImage>();
-        targetRenderer = GetComponent<Renderer>();
+        // Ensure targetRenderer is assigned
+        if (targetRenderer == null)
+        {
+            targetRenderer = GetComponent<Renderer>();
+            if (targetRenderer == null)
+            {
+                Debug.LogError("No Renderer component found on this GameObject.");
+                return;
+            }
+        }
 
-        billboardImage.GetWebImage(texture =>
+        // Get or download the web image
+        GetWebImage(texture =>
         {
             if (texture != null)
             {
@@ -32,23 +37,19 @@ public class BillboardImage : MonoBehaviour
             else
             {
                 Debug.LogWarning("Using fallback texture.");
-                targetRenderer.material.mainTexture = defaultTexture; // Assign a preloaded fallback texture
+                targetRenderer.material.mainTexture = defaultTexture;
             }
         });
-
-        UnityWebRequest request = UnityWebRequestTexture.GetTexture(webImage);
-        request.timeout = 30; // Set timeout to 30 seconds
     }
 
     public IEnumerator DownloadImage(Action<Texture2D> callback)
     {
-
         UnityWebRequest request = UnityWebRequestTexture.GetTexture(webImage);
         yield return request.SendWebRequest();
 
         if (request.result == UnityWebRequest.Result.ConnectionError || request.result == UnityWebRequest.Result.ProtocolError)
         {
-            Debug.LogError($"Failed to download image: {request.error} ({request.result})");
+            Debug.LogError($"Failed to download image: {request.error}");
             callback(null);
         }
         else
@@ -56,23 +57,23 @@ public class BillboardImage : MonoBehaviour
             Texture2D downloadedTexture = DownloadHandlerTexture.GetContent(request);
             callback(downloadedTexture);
         }
-
-        //callback(DownloadHandlerTexture.GetContent(request));
     }
 
     public void GetWebImage(Action<Texture2D> callback)
     {
         if (cachedImage != null)
         {
-            // Use the cached image
+            //Use cached image if available
             callback(cachedImage);
         }
-        else
+        else if (!isDownloading)
         {
-            // Download the image and cache it
+            //Only start downloading if not already 
+            isDownloading = true;
             StartCoroutine(DownloadImage(texture =>
             {
-                cachedImage = texture;
+                cachedImage = texture; //Cache the downloaded image
+                isDownloading = false; 
                 callback(cachedImage);
             }));
         }
@@ -80,6 +81,8 @@ public class BillboardImage : MonoBehaviour
 
     static BillboardImage()
     {
+        //Bypass SSL validation for testing purposes
         ServicePointManager.ServerCertificateValidationCallback = delegate { return true; };
     }
 }
+
