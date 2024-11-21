@@ -1,6 +1,8 @@
 using System;
+using System.Net;
 using System.Collections;
 using System.Collections.Generic;
+using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.Networking;
 
@@ -14,6 +16,8 @@ public class BillboardImage : MonoBehaviour
 
     private BillboardImage billboardImage;
 
+    public Texture defaultTexture;
+
     private void Start()
     {
         billboardImage = gameObject.AddComponent<BillboardImage>();
@@ -25,7 +29,15 @@ public class BillboardImage : MonoBehaviour
             {
                 targetRenderer.material.mainTexture = texture;
             }
+            else
+            {
+                Debug.LogWarning("Using fallback texture.");
+                targetRenderer.material.mainTexture = defaultTexture; // Assign a preloaded fallback texture
+            }
         });
+
+        UnityWebRequest request = UnityWebRequestTexture.GetTexture(webImage);
+        request.timeout = 30; // Set timeout to 30 seconds
     }
 
     public IEnumerator DownloadImage(Action<Texture2D> callback)
@@ -36,7 +48,7 @@ public class BillboardImage : MonoBehaviour
 
         if (request.result == UnityWebRequest.Result.ConnectionError || request.result == UnityWebRequest.Result.ProtocolError)
         {
-            Debug.LogError($"Failed to download image");
+            Debug.LogError($"Failed to download image: {request.error} ({request.result})");
             callback(null);
         }
         else
@@ -64,5 +76,10 @@ public class BillboardImage : MonoBehaviour
                 callback(cachedImage);
             }));
         }
+    }
+
+    static BillboardImage()
+    {
+        ServicePointManager.ServerCertificateValidationCallback = delegate { return true; };
     }
 }
